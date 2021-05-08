@@ -36,7 +36,7 @@ Function::Runner - Define functions at a higher level and run them
       print "Bye ". ($_[0] || 'World') ."\n";
       return ('ok',$_[0]);
     }
-    sub checkSwitch { return shift }
+    sub checkSwitch { return @_ }
 
     $fn = Function::Runner->new($switch);     # Create a switch
     $fn->run('/checkSwitch', 'on', 'Flash');  # Bye Flash
@@ -50,15 +50,15 @@ Function::Runner - Define functions at a higher level and run them
 
 # DESCRIPTION
 
-Function::Runner provides a way to define the steps of a function steps
-logical flow between the steps using just hashrefs. The user then
+Function::Runner provides a way to define the steps of a function and
+the logical flow between the steps using just hashrefs. The user then
 implements the steps that need to be called. The function runner will
 then run the function.
 
 This module is handy for functions that are naturally composed of many
 hierarchical steps and flows differently depending on the results of
-those steps. The function definition helps to clarify that hierarchy and
-flow at a higher level.
+those steps. The function definition helps to clarify the steps and flow
+at a higher level.
 
 A function definition (**funcdef**) is composed of three (3) constructs:
 _steps_, _functions_ and _results_. Each construct is a string with a
@@ -136,13 +136,13 @@ Taken together, the step and it's results end up reading like this:
 
 # NOTES
 
-Defining the a function in terms of _steps_, _functions_ and
-_results_ has several nice properties.
+Defining a function in terms of _steps_, _functions_ and _results_
+has several nice properties.
 
 The valid return values from each _function_ is clearly spelled out.
 
-Having a function definition makes it easier rearrange the flow of a
-function or add an additional step in the function's processing.
+Having a _funcdef_ makes it easier rearrange the flow of steps within
+that function or add an additional step in the function's processing.
 
 It is possible to directly call the steps in a function definition.
 

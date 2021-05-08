@@ -1,4 +1,8 @@
 Revision history for Function-Runner
 
-{{$NEXT}}
+0.002
+        - Added detailed error logging for debugging
+
+0.001
         - Initial release
+

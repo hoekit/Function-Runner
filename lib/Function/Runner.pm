@@ -2,103 +2,127 @@ package Function::Runner;
 
 use strict; use warnings; use utf8; use 5.10.0;
 use Data::Dumper;
-our $VERSION = '0.001';
+our $VERSION = '0.002';
 
-my $PEEK_LEVEL = 5; ## Disallow peeks below this level
+
+my $PEEK_LEVEL = 5;     # Disallow peeks below this level
 sub peek {      # ( $level, $res ) --> $res
-    ## If $level is at least PEEK_LEVEL, print content of $res
     my ($level, $res) = @_;
+
+    # Comment out logging in PROD
+    _log_save($res);
+
+    # Guard: Do nothing if $level is lower than PEEK_LEVEL
     return $res if $level < $PEEK_LEVEL;
 
+    # Print content of $res
     my $file = (caller(0))[1];
     my $line = (caller(0))[2];
+
     say "$file line $line: ". Dumper $res;
     return $res;
 }
 
+my $LOG   = [];         # Container for logs from peek()
+sub _log_save {   # ($res)
+    my $res = shift;
+    # Add to log regardless of PEEK_LEVEL
+    my $pkg  = (caller(1))[0];
+    my $file = (caller(1))[1];
+    my $line = (caller(1))[2];
+    push @$LOG, ["file:$file - pkg:$pkg - line:$line: ",$res];
+    #push @$LOG, "file:$file - pkg:$pkg - line:$line: ".$res;
+    return $res;
+}
+sub _log_fetch { return $LOG }
+sub _log_clear { $LOG = [] }
+
 
 ## CONSTRUCTORS
 sub new {
+    # Clear the LOG
+    $LOG = [];
 
     my $fn_map  = {};                   # initial function map
     my $defn    = $_[1];                # user-provided function definition
     my $pkg = (caller)[0];              # calling package
-    die "missing defn or pkg" unless defined $defn && defined $pkg;
+    _die("missing defn or pkg") unless defined $defn && defined $pkg;
 
     # See: https://perldoc.perl.org/perlmod#Symbol-Tables
     my $tab = eval '\%'.$pkg.'::';      # symbol table of calling package
-    peek 3, ['\%'.$pkg.'::',ref $tab];
+    peek 3, ['Symbol Table: ','\%'.$pkg.'::',"has ref: \"".ref($tab).'"'];
 
     _mk_fn_map($fn_map,$defn,$tab,$pkg);# build fn_map from $defn and $tab
     peek 3, ['Completed fn_map: ',$fn_map];
 
     bless { defn=>$defn,
             fn=>$fn_map,
-            log=>{ step=>[], func => [] },
+            log=>{ step => [],      # Store steps and results
+                   func => [] }     # Store funcs and results
           },
           $_[0];
 }
 
-my $LEVEL = 0;
+
+## METHODS
+my $LEVEL = 0;          # Tracks recursion levels
 sub _mk_fn_map {
     my ($fn_map, $defn, $tab, $pkg) = @_;
 
     # Walk the defn, get all coderefs
-    foreach my $res (values %$defn) {
+    foreach my $step (keys %$defn) {
+        my $res = $defn->{$step};
         my $ref = ref $res;
-        peek 3, ['Type of $res: ',$res, " is '$ref'"];
+        peek 3, ["Processing StepDef: $step",$res, " has res: \"$ref\""];
 
         if ($ref eq '') {                       # Coderef. e.g. '&bye' or '/greet'
             # Guard: Skip if Step not Func
             #   Step Example: '/greet'
             #   Func Example: '&bye'
             if ($res =~ /^\/(.*)/) {
-                peek 3, "Ignore Step Definition: $res";
+                peek 3, "Ignored StepDef when building fn_map: $res";
                 next;
             }
 
-
             my ($sym) = ($res =~ /^&(.*)/);
-            peek 3, "Processing symbol: $sym";
-            die "Bad res: $res" unless defined $sym;
+            peek 3, "Processing Func: $res";
+            _die("Bad res: $res") unless defined $sym;
 
             # Guard: Skip if already in $fn_map
             if (exists $fn_map->{$sym}) {
-                peek 3, "Already mapped: $sym";
+                peek 3, "Func already mapped: $res";
                 next;
             }
 
             # Guard: The given symbol e.g. 'hello' must be a coderef in
             #        the calling package's symbol table
-            peek 3, "--$sym-- has ref: ".ref($tab->{$sym});
-            die "\"$sym\" not a coderef in \"$pkg\""
-                unless ref $tab->{$sym} eq 'CODE';
+            my $sym_ref = exists($tab->{$sym}) ? ref($tab->{$sym}) : '?';
+            peek 3, "Func: $res has ref: \"$sym_ref\"";
+            _die("\"$sym\" not a coderef in \"$pkg\"")
+                unless $sym_ref eq 'CODE';
 
             # Add mapping of symbol to coderef
             $fn_map->{$sym} = $tab->{$sym};
-            peek 3, "Mapped symbol: $sym";
+            peek 3, "Add to fn_map: $res";
 
         } elsif ($ref eq 'HASH') {              # Defn e.g. { ':ok' => ... }
             $LEVEL++;
-            peek 3, ["Descending: ".$LEVEL, $res];
+            peek 3, ["Descending into: $step to ---- Level ".$LEVEL.' ----'];
             _mk_fn_map($fn_map, $res, $tab, $pkg);
             $LEVEL--;
-            peek 3, ["Asscending: ".$LEVEL, $res];
+            peek 3, ["Ascending from: $step to ---- Level ".$LEVEL.' ----'];
 
         } else {
-            die "Unexpected ref type: $ref";
+            _die("Unexpected ref type: $ref");
 
         }
     }
 }
-
-
-## METHODS
 sub call {
     my ($o,$func,@args) = @_;
 
     #Guard: Func must exist
-    die "Func does not exist: $func" unless exists $o->{fn}{$func};
+    _die("Func does not exist: $func") unless exists $o->{fn}{$func};
 
     #peek 3, "call $func() with args: ". join ', ',@args;
 
@@ -114,7 +138,7 @@ sub run {   # ($step) -> $result
     my @run_result;
 
     #Guard: Step must exist
-    die "Step does not exist: $step" unless exists $o->{defn}{$step};
+    _die("Step does not exist: $step") unless exists $o->{defn}{$step};
 
     # Clear the logs if at LEVEL 0
     if ($LEVEL == 0) {
@@ -129,7 +153,7 @@ sub run {   # ($step) -> $result
     if ($ref eq '') {           # e.g. '&bye'
         # Get the function to run
         my ($fn) = ($def =~ /^&(.*)/);
-        die "Defn is not a function: $def" unless defined ($fn);
+        _die("Defn is not a function: $def") unless defined ($fn);
         peek 3, "Step $step calls function $fn()";
 
         # Call the function, return the result
@@ -141,11 +165,11 @@ sub run {   # ($step) -> $result
         peek 1, ["Descending non-terminal step: ".$LEVEL, $def];
 
         # Guard: The 'run' attribute must exist in the definition
-        die "Defn of $step missing 'run' attribute" unless defined $def->{run};
+        _die("Defn of $step missing 'run' attribute") unless defined $def->{run};
 
         # Get the function to run
         my ($fn) = ($def->{run} =~ /^&(.*)/);
-        die "Defn of $step is not a function: $def" unless defined ($fn);
+        _die("Defn of $step is not a function: $def") unless defined ($fn);
         peek 3, "Step $step calls function $fn()";
 
         # Call the function, save the result
@@ -160,7 +184,7 @@ sub run {   # ($step) -> $result
         my $next_step = $def->{':'.$fn_res};
 
         # Guard: The next step must exist for non-terminal (HASHREF) steps
-        die "Next step of $step:$fn_res undefined" unless defined $next_step;
+        _die("Next step of $step:$fn_res undefined") unless defined $next_step;
 
         peek 1, ["The next step and args:", $next_step, [@new_args]];
 
@@ -182,14 +206,26 @@ sub run {   # ($step) -> $result
 
         return @run_result;
     } else {
-        die "Unexpected Step type: $ref";
+        _die("Unexpected Step type: $ref");
     }
 }
 sub steps { return shift->{log}{step} }
 sub funcs { return shift->{log}{func} }
 
-# Helper functions
 
+# PRIVATE HELPERS
+sub _die {
+    # Private method to display all errors and then die
+    my ($o,$msg) = @_;
+
+    my ($pkg,$file,$line) = caller;
+
+    # Case called as a function, message is the first arg
+    if (ref $o eq '') { $msg = $o }
+
+    peek 999, $LOG;
+    die "\n  $msg\n    (pkg: $pkg - file: $file - line: $line)\n     ";
+}
 
 
 1;
@@ -235,7 +271,7 @@ Function::Runner - Define functions at a higher level and run them
     print "Bye ". ($_[0] || 'World') ."\n";
     return ('ok',$_[0]);
   }
-  sub checkSwitch { return shift }
+  sub checkSwitch { return @_ }
 
   $fn = Function::Runner->new($switch);     # Create a switch
   $fn->run('/checkSwitch', 'on', 'Flash');  # Bye Flash
@@ -250,15 +286,15 @@ Function::Runner - Define functions at a higher level and run them
 =cut
 =head1 DESCRIPTION
 
-Function::Runner provides a way to define the steps of a function steps
-logical flow between the steps using just hashrefs. The user then
+Function::Runner provides a way to define the steps of a function and
+the logical flow between the steps using just hashrefs. The user then
 implements the steps that need to be called. The function runner will
 then run the function.
 
 This module is handy for functions that are naturally composed of many
 hierarchical steps and flows differently depending on the results of
-those steps. The function definition helps to clarify that hierarchy and
-flow at a higher level.
+those steps. The function definition helps to clarify the steps and flow
+at a higher level.
 
 A function definition (B<funcdef>) is composed of three (3) constructs:
 I<steps>, I<functions> and I<results>. Each construct is a string with a
@@ -340,13 +376,13 @@ Taken together, the step and it's results end up reading like this:
 =cut
 =head1 NOTES
 
-Defining the a function in terms of I<steps>, I<functions> and
-I<results> has several nice properties.
+Defining a function in terms of I<steps>, I<functions> and I<results>
+has several nice properties.
 
 The valid return values from each I<function> is clearly spelled out.
 
-Having a function definition makes it easier rearrange the flow of a
-function or add an additional step in the function's processing.
+Having a I<funcdef> makes it easier rearrange the flow of steps within
+that function or add an additional step in the function's processing.
 
 It is possible to directly call the steps in a function definition.
 
