@@ -98,10 +98,7 @@ sub _mk_fn_map {
             #        function in the calling package
             my $is_code = eval 'defined &'.$pkg.'::'.$sym ? 1 : 0;
             peek 3, "Func: $res is code: \"$is_code\"";
-            _die(Dumper([sort keys %$tab])
-                 ."ref: ".Dumper(ref $tab->{$sym})
-                 ."val: ".Dumper($tab->{$sym})
-                 ."\n\n"."\"$sym\" not a coderef in \"$pkg\"")
+            _die("\n\n"."\"$sym\" not a coderef in \"$pkg\"")
                 unless $is_code;
 
             # Add mapping of symbol to coderef
