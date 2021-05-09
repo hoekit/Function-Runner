@@ -49,6 +49,7 @@ sub new {
     _die("missing defn or pkg") unless defined $defn && defined $pkg;
 
     # See: https://perldoc.perl.org/perlmod#Symbol-Tables
+    $pkg = $pkg eq 'main' ? '' : $pkg;  # Convert main to ''
     my $tab = eval '\%'.$pkg.'::';      # symbol table of calling package
     peek 3, ['Symbol Table: ','\%'.$pkg.'::',"has ref: \"".ref($tab).'"'];
 
