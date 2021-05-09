@@ -2,7 +2,7 @@ package Function::Runner;
 
 use strict; use warnings; use utf8; use 5.10.0;
 use Data::Dumper;
-our $VERSION = '0.002';
+our $VERSION = '0.003';
 
 
 my $PEEK_LEVEL = 5;     # Disallow peeks below this level
