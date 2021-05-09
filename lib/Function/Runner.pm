@@ -98,7 +98,7 @@ sub _mk_fn_map {
             #        the calling package's symbol table
             my $sym_ref = exists($tab->{$sym}) ? ref($tab->{$sym}) : '?';
             peek 3, "Func: $res has ref: \"$sym_ref\"";
-            _die("\"$sym\" not a coderef in \"$pkg\"")
+            _die(Dumper([sort keys %$tab])."\n\n"."\"$sym\" not a coderef in \"$pkg\"")
                 unless $sym_ref eq 'CODE';
 
             # Add mapping of symbol to coderef
