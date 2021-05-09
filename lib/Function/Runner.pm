@@ -49,7 +49,6 @@ sub new {
     _die("missing defn or pkg") unless defined $defn && defined $pkg;
 
     # See: https://perldoc.perl.org/perlmod#Symbol-Tables
-    $pkg = $pkg eq 'main' ? '' : $pkg;  # Convert main to ''
     my $tab = eval '\%'.$pkg.'::';      # symbol table of calling package
     peek 3, ['Symbol Table: ','\%'.$pkg.'::',"has ref: \"".ref($tab).'"'];
 
@@ -95,15 +94,15 @@ sub _mk_fn_map {
                 next;
             }
 
-            # Guard: The given symbol e.g. 'hello' must be a coderef in
-            #        the calling package's symbol table
-            my $sym_ref = exists($tab->{$sym}) ? ref($tab->{$sym}) : '?';
-            peek 3, "Func: $res has ref: \"$sym_ref\"";
+            # Guard: The given symbol e.g. 'hello' must be defined as a
+            #        function in the calling package
+            my $is_code = eval 'defined &'.$pkg.'::'.$sym ? 1 : 0;
+            peek 3, "Func: $res is code: \"$is_code\"";
             _die(Dumper([sort keys %$tab])
                  ."ref: ".Dumper(ref $tab->{$sym})
                  ."val: ".Dumper($tab->{$sym})
                  ."\n\n"."\"$sym\" not a coderef in \"$pkg\"")
-                unless $sym_ref eq 'CODE';
+                unless $is_code;
 
             # Add mapping of symbol to coderef
             $fn_map->{$sym} = $tab->{$sym};
