@@ -223,8 +223,8 @@ sub _die {
     # Case called as a function, message is the first arg
     if (ref $o eq '') { $msg = $o }
 
-    peek 999, $LOG;
-    die "\n  $msg\n    (pkg: $pkg - file: $file - line: $line)\n     ";
+    die Dumper($LOG)
+        ."\n  $msg\n    (pkg: $pkg - file: $file - line: $line)\n     ";
 }
 
 
